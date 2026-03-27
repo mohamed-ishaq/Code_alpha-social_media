@@ -13,6 +13,7 @@ const { generalLimiter } = require('./middleware/rateLimiter');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const postRoutes = require('./routes/posts');
+const notificationsRoutes = require('./routes/notifications');
 
 // Connect to MongoDB
 connectDB();
@@ -55,6 +56,7 @@ app.use(express.static(path.join(__dirname, '../frontend/public')));
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

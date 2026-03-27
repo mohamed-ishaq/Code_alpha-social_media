@@ -77,6 +77,11 @@ const API = (() => {
       deleteComment: (postId, cid) => request('DELETE', `/posts/${postId}/comments/${cid}`),
       likeComment:   (cid)         => request('POST',   `/posts/comments/${cid}/like`),
     },
+
+    // Notifications
+    notifications: {
+      list: (limit = 50) => request('GET', `/notifications?limit=${limit}`),
+    },
   };
 })();
 

@@ -6,6 +6,7 @@ const Router = (() => {
     { pattern: /^\/login$/, page: 'login' },
     { pattern: /^\/register$/, page: 'register' },
     { pattern: /^\/explore$/, page: 'explore' },
+    { pattern: /^\/notifications$/, page: 'notifications' },
     { pattern: /^\/profile\/([a-zA-Z0-9_]+)$/, page: 'profile', param: 1 },
     { pattern: /^\/post\/([a-zA-Z0-9]+)$/, page: 'post', param: 1 },
   ];
@@ -90,6 +91,11 @@ const Router = (() => {
       case 'profile':
         await ProfilePage.render(param);
         Sidebar.renderLeft('profile');
+        break;
+
+      case 'notifications':
+        await NotificationsPage.render();
+        Sidebar.renderLeft('notifications');
         break;
 
       case 'post':
