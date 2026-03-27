@@ -1,0 +1,11 @@
+{
+  "name": "devlink",
+  "version": "1.0.0",
+  "description": "DevLink — Developer Social Network",
+  "private": true,
+  "scripts": {
+    "install": "cd backend && npm install",
+    "start": "cd backend && npm start",
+    "dev": "cd backend && npm run dev"
+  }
+}
