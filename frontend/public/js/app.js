@@ -2,6 +2,14 @@
 
 const App = (() => {
   const init = async () => {
+    // DEV behavior: always start from the login screen and ignore any persisted auth.
+    // If you want "stay logged in" again, set this to false.
+    const FORCE_LOGIN_ON_LOAD = true;
+    if (FORCE_LOGIN_ON_LOAD) {
+      Auth.clear();
+      Router.navigate('/login', true);
+    }
+
     // Navbar scroll effect
     const navbar = document.getElementById('navbar');
     window.addEventListener('scroll', () => {
