@@ -57,6 +57,11 @@ const API = (() => {
       getFollowing:(username, p=1)  => request('GET',  `/users/${username}/following?page=${p}`),
       follow:      (username)       => request('POST', `/users/${username}/follow`),
       update:      (data)           => request('PUT',  '/users/profile', data),
+      uploadAvatar:(file)           => {
+        const fd = new FormData();
+        fd.append('avatar', file);
+        return request('PUT', '/users/avatar', fd);
+      },
       search:      (q, p=1)         => request('GET',  `/users/search?q=${encodeURIComponent(q)}&page=${p}`),
       suggestions: ()               => request('GET',  '/users/suggestions'),
     },
@@ -81,6 +86,17 @@ const API = (() => {
     // Notifications
     notifications: {
       list: (limit = 50) => request('GET', `/notifications?limit=${limit}`),
+    },
+
+    // Messages (followers only)
+    messages: {
+      threads: () => request('GET', '/messages/threads'),
+      getWith: (username, opts = {}) => {
+        const limit = opts.limit || 50;
+        const markRead = opts.markRead === false ? 'false' : 'true';
+        return request('GET', `/messages/with/${username}?limit=${limit}&markRead=${markRead}`);
+      },
+      sendTo: (username, content) => request('POST', `/messages/with/${username}`, { content }),
     },
   };
 })();

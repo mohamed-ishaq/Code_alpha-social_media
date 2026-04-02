@@ -216,20 +216,19 @@ const HomePage = (() => {
     content.innerHTML = `
       <div class="section-header">
         <span class="section-title">Home</span>
-        <button class="btn-icon" id="refresh-feed-btn" title="Refresh">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-        </button>
+        <div style="display:flex;align-items:center;gap:10px">
+          <button class="btn-secondary btn-sm" id="new-post-btn">New Post</button>
+          <button class="btn-icon" id="refresh-feed-btn" title="Refresh">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+        </div>
       </div>
-      ${PostComposer.render()}
+      <div id="followers-status"></div>
       <div id="feed-list"></div>
       <div id="feed-footer"></div>
     `;
 
-    PostComposer.attach((newPost) => {
-      const list = document.getElementById('feed-list');
-      const card = PostCard.build(newPost);
-      list.prepend(card);
-    });
+    document.getElementById('new-post-btn')?.addEventListener('click', () => Router.navigate('/compose'));
 
     document.getElementById('refresh-feed-btn')?.addEventListener('click', () => {
       _page = 1; _hasMore = true;
@@ -237,8 +236,84 @@ const HomePage = (() => {
       loadFeed();
     });
 
+    await renderFollowersStatus();
     await loadFeed();
     setupInfiniteScroll();
+  };
+
+  const renderFollowersStatus = async () => {
+    const box = document.getElementById('followers-status');
+    if (!box) return;
+    box.innerHTML = `
+      <div class="widget-card followers-status-card">
+        <div class="widget-title">Followers Status</div>
+        <div class="followers-status-list" id="followers-status-list">
+          <div class="page-loading" style="padding:14px 0"><div class="spinner"></div></div>
+        </div>
+      </div>
+    `;
+
+    try {
+      const me = Auth.getUser();
+      const { followers } = await API.users.getFollowers(me.username, 1);
+      const list = (followers || []).slice(0, 12);
+      const listEl = document.getElementById('followers-status-list');
+      if (!listEl) return;
+
+      if (list.length === 0) {
+        listEl.innerHTML = `
+          <div style="padding:6px 0 12px;color:var(--color-text-muted);font-size:13px">
+            No followers yet. When someone follows you, their status will show here.
+          </div>
+        `;
+        return;
+      }
+
+      const now = Date.now();
+      const ONLINE_WINDOW_MS = 5 * 60 * 1000;
+
+      listEl.innerHTML = list.map(u => {
+        const avatarBg = Utils.avatarColor(u.username);
+        const avatarContent = u.avatar
+          ? `<img src="${u.avatar}" onerror="this.remove()">`
+          : Utils.initials(u.displayName || u.username);
+
+        const last = u.lastActiveAt ? new Date(u.lastActiveAt).getTime() : 0;
+        const online = last && (now - last) < ONLINE_WINDOW_MS;
+        const statusText = online ? 'Online' : last ? `Seen ${Utils.timeAgo(u.lastActiveAt)} ago` : 'Offline';
+
+        return `
+          <div class="fstatus-item" data-username="${u.username}">
+            <div class="avatar avatar-xs" style="background:${avatarBg}">${avatarContent}</div>
+            <div class="fstatus-main">
+              <div class="fstatus-name">${Utils.escapeHtml(u.displayName || u.username)}</div>
+              <div class="fstatus-sub">
+                <span class="status-dot ${online ? 'on' : ''}"></span>
+                ${statusText}
+              </div>
+            </div>
+            <button class="btn-secondary btn-sm fstatus-msg" data-username="${u.username}">Message</button>
+          </div>
+        `;
+      }).join('');
+
+      listEl.querySelectorAll('.fstatus-item').forEach(row => {
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('button')) return;
+          Router.navigate(`/profile/${row.dataset.username}`);
+        });
+      });
+
+      listEl.querySelectorAll('.fstatus-msg').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          Router.navigate(`/messages/${btn.dataset.username}`);
+        });
+      });
+    } catch (err) {
+      const listEl = document.getElementById('followers-status-list');
+      if (listEl) listEl.innerHTML = `<div class="error-state">Failed to load follower status.</div>`;
+    }
   };
 
   const loadFeed = async () => {

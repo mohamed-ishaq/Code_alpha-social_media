@@ -6,6 +6,29 @@ const Post = require('../models/Post');
 const Follow = require('../models/Follow');
 const Like = require('../models/Like');
 const { protect, optionalAuth } = require('../middleware/auth');
+const { uploadAvatarImage } = require('../middleware/upload');
+const path = require('path');
+const fs = require('fs/promises');
+const crypto = require('crypto');
+const sharp = require('sharp');
+
+const uploadsRoot = path.join(__dirname, '..', 'uploads');
+const avatarsUploadDir = path.join(uploadsRoot, 'avatars');
+
+const ensureDir = async (dirPath) => {
+  await fs.mkdir(dirPath, { recursive: true });
+};
+
+const removeOldAvatar = async (avatarUrl) => {
+  if (!avatarUrl || typeof avatarUrl !== 'string') return;
+  if (!avatarUrl.startsWith('/uploads/avatars/')) return;
+
+  const rel = avatarUrl.replace(/^\/uploads\//, '');
+  const abs = path.resolve(uploadsRoot, rel);
+  if (!abs.startsWith(path.resolve(uploadsRoot))) return;
+
+  try { await fs.unlink(abs); } catch (e) {}
+};
 
 // @GET /api/users/search
 router.get('/search', optionalAuth, async (req, res, next) => {
@@ -59,16 +82,19 @@ router.get('/:username', optionalAuth, async (req, res, next) => {
 
     let isFollowing = false;
     let isOwnProfile = false;
+    let followsYou = false;
 
     if (req.user) {
       isOwnProfile = req.user._id.toString() === user._id.toString();
       if (!isOwnProfile) {
         const follow = await Follow.findOne({ follower: req.user._id, following: user._id });
         isFollowing = !!follow;
+        const reverse = await Follow.findOne({ follower: user._id, following: req.user._id });
+        followsYou = !!reverse;
       }
     }
 
-    res.json({ success: true, user, isFollowing, isOwnProfile });
+    res.json({ success: true, user, isFollowing, isOwnProfile, followsYou });
   } catch (err) {
     next(err);
   }
@@ -104,6 +130,42 @@ router.put('/profile', protect, [
     ).select('-password');
 
     res.json({ success: true, message: 'Profile updated successfully.', user });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// @PUT /api/users/avatar (multipart/form-data: avatar=<file>)
+router.put('/avatar', protect, uploadAvatarImage, async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: 'Avatar image is required.' });
+    }
+
+    await ensureDir(avatarsUploadDir);
+
+    const id = crypto.randomBytes(12).toString('hex');
+    const filename = `${Date.now()}-${id}.webp`;
+    const outPath = path.join(avatarsUploadDir, filename);
+
+    await sharp(req.file.buffer)
+      .rotate()
+      .resize({ width: 512, height: 512, fit: 'cover' })
+      .webp({ quality: 82 })
+      .toFile(outPath);
+
+    const newUrl = `/uploads/avatars/${filename}`;
+
+    const existing = await User.findById(req.user._id).select('avatar');
+    if (existing?.avatar) await removeOldAvatar(existing.avatar);
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: { avatar: newUrl } },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    res.json({ success: true, message: 'Avatar updated successfully.', user });
   } catch (err) {
     next(err);
   }
@@ -151,7 +213,7 @@ router.get('/:username/followers', optionalAuth, async (req, res, next) => {
 
     const { page = 1, limit = 20 } = req.query;
     const followers = await Follow.find({ following: user._id })
-      .populate('follower', 'username displayName avatar bio followersCount')
+      .populate('follower', 'username displayName avatar bio followersCount lastActiveAt')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit));
@@ -170,7 +232,7 @@ router.get('/:username/following', optionalAuth, async (req, res, next) => {
 
     const { page = 1, limit = 20 } = req.query;
     const following = await Follow.find({ follower: user._id })
-      .populate('following', 'username displayName avatar bio followersCount')
+      .populate('following', 'username displayName avatar bio followersCount lastActiveAt')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit));

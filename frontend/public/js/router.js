@@ -7,6 +7,9 @@ const Router = (() => {
     { pattern: /^\/register$/, page: 'register' },
     { pattern: /^\/explore$/, page: 'explore' },
     { pattern: /^\/notifications$/, page: 'notifications' },
+    { pattern: /^\/compose$/, page: 'compose' },
+    { pattern: /^\/messages$/, page: 'messages' },
+    { pattern: /^\/messages\/([a-zA-Z0-9_]+)$/, page: 'messages', param: 1 },
     { pattern: /^\/profile\/([a-zA-Z0-9_]+)$/, page: 'profile', param: 1 },
     { pattern: /^\/post\/([a-zA-Z0-9]+)$/, page: 'post', param: 1 },
   ];
@@ -96,6 +99,16 @@ const Router = (() => {
       case 'notifications':
         await NotificationsPage.render();
         Sidebar.renderLeft('notifications');
+        break;
+
+      case 'compose':
+        await ComposePage.render();
+        Sidebar.renderLeft('compose');
+        break;
+
+      case 'messages':
+        await MessagesPage.render(param || '');
+        Sidebar.renderLeft('messages');
         break;
 
       case 'post':

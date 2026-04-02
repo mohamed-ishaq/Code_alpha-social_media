@@ -1,6 +1,15 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
+const touchLastActive = (user) => {
+  try {
+    const last = user && user.lastActiveAt ? new Date(user.lastActiveAt).getTime() : 0;
+    if (!last || (Date.now() - last) > 60000) {
+      User.updateOne({ _id: user._id }, { $set: { lastActiveAt: new Date() } }).catch(() => {});
+    }
+  } catch (e) {}
+};
+
 const protect = async (req, res, next) => {
   try {
     let token;
@@ -29,6 +38,7 @@ const protect = async (req, res, next) => {
     }
 
     req.user = user;
+    touchLastActive(user);
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
@@ -49,7 +59,11 @@ const optionalAuth = async (req, res, next) => {
     }
     if (token) {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      req.user = await User.findById(decoded.id).select('-password');
+      const user = await User.findById(decoded.id).select('-password');
+      if (user) {
+        req.user = user;
+        touchLastActive(user);
+      }
     }
   } catch (e) {
     // optional — silently ignore

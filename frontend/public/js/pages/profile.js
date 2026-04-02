@@ -31,7 +31,7 @@ const ProfilePage = (() => {
     }
   };
 
-  const renderProfile = ({ user, isFollowing, isOwnProfile }) => {
+  const renderProfile = ({ user, isFollowing, isOwnProfile, followsYou }) => {
     const content = document.getElementById('content-area');
     const avatarBg = Utils.avatarColor(user.username);
     const avatarContent = user.avatar
@@ -52,9 +52,12 @@ const ProfilePage = (() => {
             ${isOwnProfile ? `
               <button class="btn-secondary" id="edit-profile-btn">Edit Profile</button>
             ` : `
-              <button class="${isFollowing ? 'btn-secondary' : 'btn-primary'} follow-profile-btn" id="follow-profile-btn" data-username="${user.username}" data-following="${isFollowing}">
-                ${isFollowing ? 'Following' : 'Follow'}
-              </button>
+              <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+                <button class="${isFollowing ? 'btn-secondary' : 'btn-primary'} follow-profile-btn" id="follow-profile-btn" data-username="${user.username}" data-following="${isFollowing}">
+                  ${isFollowing ? 'Following' : 'Follow'}
+                </button>
+                ${followsYou ? `<button class="btn-secondary" id="message-profile-btn">Message</button>` : ''}
+              </div>
             `}
           </div>
         </div>
@@ -123,6 +126,11 @@ const ProfilePage = (() => {
         finally { followBtn.disabled = false; }
       });
     }
+
+    // Message (followers only)
+    content.querySelector('#message-profile-btn')?.addEventListener('click', () => {
+      Router.navigate(`/messages/${user.username}`);
+    });
 
     // Edit profile
     content.querySelector('#edit-profile-btn')?.addEventListener('click', () => openEditProfile(user));
@@ -234,8 +242,19 @@ const ProfilePage = (() => {
     const modal = Modal.open(`
       <div class="edit-profile-form">
         <div class="form-group">
-          <label class="form-label">Avatar URL</label>
-          <input type="url" class="form-input" id="edit-avatar" placeholder="https://example.com/avatar.jpg" value="${Utils.escapeHtml(user.avatar || '')}" />
+          <label class="form-label">Profile Picture</label>
+          <div style="display:flex;align-items:center;gap:12px">
+            <div class="avatar avatar-lg" id="edit-avatar-preview" style="background:${Utils.avatarColor(user.username)}">
+              ${user.avatar ? `<img src="${user.avatar}" onerror="this.remove();this.parentElement.textContent='${Utils.initials(user.displayName || user.username)}'">` : Utils.initials(user.displayName || user.username)}
+            </div>
+            <div style="flex:1">
+              <input type="file" class="form-input" id="edit-avatar-file" accept="image/*" />
+              <div class="form-hint">Upload a square image for best results.</div>
+              <div class="avatar-url-row" style="margin-top:10px">
+                <input type="url" class="form-input" id="edit-avatar-url" placeholder="Or paste an image URL" value="${Utils.escapeHtml(user.avatar || '')}" />
+              </div>
+            </div>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Display Name</label>
@@ -295,6 +314,36 @@ const ProfilePage = (() => {
       }
     });
 
+    // Avatar preview
+    const preview = modal.querySelector('#edit-avatar-preview');
+    const fileInput = modal.querySelector('#edit-avatar-file');
+    const urlInput = modal.querySelector('#edit-avatar-url');
+    let filePreviewUrl = '';
+
+    const setPreviewFromUrl = (url) => {
+      if (!preview) return;
+      const initials = Utils.initials(user.displayName || user.username);
+      const safeUrl = (url || '').trim();
+      if (!safeUrl) {
+        preview.innerHTML = initials;
+        return;
+      }
+      preview.innerHTML = `<img src="${Utils.escapeHtml(safeUrl)}" onerror="this.remove();this.parentElement.textContent='${initials}'">`;
+    };
+
+    fileInput?.addEventListener('change', () => {
+      const f = fileInput.files && fileInput.files[0];
+      if (!f) return;
+      try { if (filePreviewUrl) URL.revokeObjectURL(filePreviewUrl); } catch (e) {}
+      filePreviewUrl = URL.createObjectURL(f);
+      setPreviewFromUrl(filePreviewUrl);
+    });
+
+    urlInput?.addEventListener('input', () => {
+      if (fileInput?.files?.length) return;
+      setPreviewFromUrl(urlInput.value);
+    });
+
     // Save
     modal.querySelector('#save-profile-btn').addEventListener('click', async (e) => {
       const btn = e.currentTarget;
@@ -302,8 +351,10 @@ const ProfilePage = (() => {
       errEl.style.display = 'none';
       btn.disabled = true; btn.textContent = 'Saving...';
 
+      const avatarFile = fileInput?.files?.[0] || null;
+      const avatarUrl = (urlInput?.value || '').trim();
+
       const payload = {
-        avatar:      modal.querySelector('#edit-avatar').value.trim(),
         displayName: modal.querySelector('#edit-displayname').value.trim(),
         bio:         modal.querySelector('#edit-bio').value.trim(),
         location:    modal.querySelector('#edit-location').value.trim(),
@@ -311,12 +362,20 @@ const ProfilePage = (() => {
         skills,
       };
 
+      if (avatarUrl && !avatarFile) payload.avatar = avatarUrl;
+
       try {
-        const { user: updated } = await API.users.update(payload);
-        Auth.updateUser(updated);
+        const { user: updatedProfile } = await API.users.update(payload);
+        Auth.updateUser(updatedProfile);
+
+        if (avatarFile) {
+          const { user: updatedAvatar } = await API.users.uploadAvatar(avatarFile);
+          Auth.updateUser(updatedAvatar);
+        }
+
         Modal.close();
         Toast.success('Profile updated!');
-        render(updated.username);
+        render(updatedProfile.username);
       } catch (err) {
         errEl.textContent = err.message;
         errEl.style.display = 'block';

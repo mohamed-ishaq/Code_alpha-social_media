@@ -88,6 +88,10 @@ const userSchema = new mongoose.Schema({
   linkedinUrl: {
     type: String,
     default: ''
+  },
+  lastActiveAt: {
+    type: Date,
+    default: null
   }
 }, {
   timestamps: true,

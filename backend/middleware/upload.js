@@ -22,5 +22,10 @@ const uploadPostImages = multer({
   fileFilter: imageFileFilter,
 }).array('images', 4);
 
-module.exports = { uploadPostImages };
+const uploadAvatarImage = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: parseMaxFileSize(), files: 1 },
+  fileFilter: imageFileFilter,
+}).single('avatar');
 
+module.exports = { uploadPostImages, uploadAvatarImage };
